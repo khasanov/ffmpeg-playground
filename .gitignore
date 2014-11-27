@@ -27,3 +27,6 @@
 *.i*86
 *.x86_64
 *.hex
+
+# Video for testing
+big_buck_bunny_480p_surround-fix.avi
