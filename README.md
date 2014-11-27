@@ -73,8 +73,7 @@ DivX и MP3. *Пакет* (packet) содержит одни или нескол
 В этом туториале мы собираемся открыть файл, прочитать видеопоток внутри него и
 сохранить первый кадр в PPM файл.
 
-Зависимости
------------
+#### Зависимости
 
 Для начала установим необходимые зависимости
     $ sudo apt-get install libavutil-dev libavcodec-deb libavformat-dev
@@ -84,8 +83,7 @@ Bunny](http://download.blender.org/peach/bigbuckbunny_movies/big_buck_bunny_480p
 (210M).
 
 
-Открытие файла
---------------
+#### Открытие файла
 
 Во-первых, инициализируем библиотеку.
 
@@ -117,8 +115,7 @@ if (avformat_open_input(&pFormatCtx, argv[1], NULL, NULL) != 0) {
 
 Функция читает заголовок файла и сохраняет информацию в структуре AVFileContext.
 
-Информация о потоках
---------------------
+#### Информация о потоках
 
 Читаем информацию о потоках
 ```cpp
@@ -135,13 +132,10 @@ if (avformat_find_stream_info(pFormatCtx, NULL) < 0) {
 av_dump_format(pFormatCtx, 0, argv[1], 0);
 ```
 
-Компиляция
-----------
+#### Компиляция
     gcc -o tutorial01 tutorial01.c -lavformat
 
-Запуск
-------
-
+#### Запуск
     $ ./tutorial01 big_buck_bunny_480p_surround-fix.avi
     Input #0, avi, from 'big_buck_bunny_480p_surround-fix.avi':
       Duration: 00:09:56.45, start: 0.000000, bitrate: 2957 kb/s
@@ -149,5 +143,47 @@ av_dump_format(pFormatCtx, 0, argv[1], 0);
         Stream #0.1: Audio: ac3, 48000 Hz, 5.1, fltp, 448 kb/s
 
 
+#### Находим первый видеопоток
+
+Пройдемся по массиву указателей `pFormatCtx->streams` (размер массива
+`pFormatCtx->nb_streams`), пока не найдем видеопоток.
+```cpp
+AVCodecContext *pCodecCtx = NULL;
+int i, videoStream;
+// Find the first video stream
+videoStream=-1;
+for (i = 0; i < pFormatCtx->nb_streams; i++) {
+    if (pFormatCtx->streams[i]->codec->codec_type == AVMEDIA_TYPE_VIDEO) {
+        videoStream = i;
+        break;
+    }
+}
+if (videoStream == -1) {
+    return -1; // Didn't find a video stream
+}
+
+// Get a pointer to the codec context for the video stream
+pCodecCtx = pFormatCtx->streams[videoStream]->codec;
+
+```
+
+#### Откроем необходимый кодек
+
+Обратите внимание, что при сборке необходимо слинковаться с libavcodec
+
+```cpp
+AVCodec *pCodec = NULL;
+AVDictionary *optionsDict = NULL;
+// Find the decoder for the video stream
+pCodec = avcodec_find_decoder(pCodecCtx->codec_id);
+if (pCodec == NULL) {
+    fprintf(stderr, "Unsupported codec!\n");
+    return -1; // Codec not found
+}
+// Open codec
+if (avcodec_open2(pCodecCtx, pCodec, &optionsDict) < 0) {
+    return -1; // Could not open codec
+}
+```
 
 
