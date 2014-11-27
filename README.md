@@ -186,4 +186,54 @@ if (avcodec_open2(pCodecCtx, pCodec, &optionsDict) < 0) {
 }
 ```
 
+#### Сохранение данных
 
+Теперь нам необходимо место для хранения кадра
+```cpp
+AVFrame *pFrame = NULL;
+// Allocate video frame
+pFrame = avcodec_alloc_frame();
+```
+
+Поскольку мы планируем сохранить кадр в PPM файл, который хранит 25-битный RGB,
+нам нужно сконвертировать кадр из его родного формата в RGB. ffmpeg сделает это
+преобразование за нас. Выделим место под преобразованный кадр.
+
+```cpp
+// Allocate an AVFrame structure
+AVFrame *pFrameRGB = NULL;
+pFrameRGB = avcodec_alloc_frame();
+if (pFrameRGB == NULL) {
+    return -1;
+}
+```
+
+Несмотря на то, что мы выделили место для фрейма, нам все еще необходимо место
+для хранения данных при конвертации. Мы используем `avpicture_get_size()` для
+выяснения необходимого размера, и выделим место вручную.
+
+```cpp
+uint8_t *buffer;
+int numBytes;
+// Determine required buffer size and allocate buffer
+numBytes = avpicture_get_size(PIX_FMT_RGB24, pCodecCtx->width,
+                              pCodecCtx->height);
+buffer = (uint8_t *) av_malloc(numBytes*sizeof(uint8_t));
+```
+
+`av_malloc()` -- это обёртка ffmpeg вокруг malloc, которая проверяет
+выравнивание и всё такое. Она *не* защищает от утечек, двойного освобождения и
+других проблем.
+
+Для использования `av_malloc` приложение необходимо слинковать с `libavutil`
+
+Теперь используем `avpicture_fill()` для связывания кадра с нашим буфером.
+```cpp
+// Assign appropriate parts of buffer to image planes in pFrameRGB
+// Note that pFrameRGB is an AVFrame, but AVFrame is a superset
+// of AVPicture
+avpicture_fill((AVPicture *)pFrameRGB. buffer, PIX_FMT_RGB24,
+               pCodecCtx->width, pCodecCtx->height);
+```
+
+Теперь мы готовы прочитать поток.

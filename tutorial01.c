@@ -8,6 +8,10 @@ int main(int argc, char *argv[]) {
     AVCodecContext *pCodecCtx = NULL;
     AVCodec *pCodec = NULL;
     AVDictionary *optionsDict = NULL;
+    AVFrame *pFrame = NULL;
+    AVFrame *pFrameRGB = NULL;
+    uint8_t *buffer = NULL;
+    int numBytes;
 
     if (argc < 2) {
         printf("Please provide a movie file\n");
@@ -57,6 +61,25 @@ int main(int argc, char *argv[]) {
         return -1; // Could not open codec
     }
 
+    // Allocate video frame
+    pFrame = avcodec_alloc_frame();
+
+    // Allocate an AVFrame structure
+    pFrameRGB = avcodec_alloc_frame();
+    if (pFrameRGB == NULL) {
+        return -1;
+    }
+
+    // Determine required buffer size and allocate buffer
+    numBytes = avpicture_get_size(PIX_FMT_RGB24, pCodecCtx->width,
+                                  pCodecCtx->height);
+    buffer = (uint8_t *) av_malloc(numBytes*sizeof(uint8_t));
+
+    // Assign appropriate parts of buffer to image planes in pFrameRGB
+    // Note that pFrameRGB is an AVFrame, but AVFrame is a superset
+    // of AVPicture
+    avpicture_fill((AVPicture *)pFrameRGB, buffer, PIX_FMT_RGB24,
+                   pCodecCtx->width, pCodecCtx->height);
 
     return 0;
 }
