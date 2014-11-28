@@ -436,3 +436,24 @@ rect.h = pCodecCtx->height;
 SDL_DisplayYUVOverlay(bmp, &rect);
 ```
 
+Теперь добавим ещё обработку события выхода.
+```cpp
+SDL_Event event;
+/* ... code ... */
+av_free_packet(&packet);
+
+SDL_PollEvent(&event);
+switch (event.type) {
+case SDL_QUIT:
+    SDL_Quit();
+    exit(0);
+    break;
+default:
+    break;
+}
+```
+
+К чему приведет запуск программы? Видео воспроизводится с сумасшедшей
+скоростью! На самом деле, все кадры показываются с той же скоростью, с какой
+извлекаются из файла. В туториале 5 мы синхронизуем видео. Но сначала более
+важная задача: звук!

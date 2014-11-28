@@ -24,6 +24,7 @@ int main(int argc, char *argv[]) {
     SDL_Surface *screen = NULL;
     SDL_Overlay *bmp = NULL;
     SDL_Rect rect;
+    SDL_Event event;
 
     if (argc < 2) {
         printf("Please provide a movie file\n");
@@ -140,6 +141,15 @@ int main(int argc, char *argv[]) {
 
         // Free the packet that was allocated by av_read_frame
         av_free_packet(&packet);
+        SDL_PollEvent(&event);
+        switch (event.type) {
+        case SDL_QUIT:
+            SDL_Quit();
+            exit(0);
+            break;
+        default:
+            break;
+        }
     }
 
     // Free the YUV frame
