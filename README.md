@@ -237,3 +237,96 @@ avpicture_fill((AVPicture *)pFrameRGB. buffer, PIX_FMT_RGB24,
 ```
 
 Теперь мы готовы прочитать поток.
+
+#### Чтение данных
+
+Теперь мы собираемся прочитать пакет из потока, декодировать его в наш кадр,
+после чего сконвертировать и сохранить этот кадр.
+
+Структура SwsContext и функции sws_scale и sws_getContext определены в
+libswscale. Не забудьте подключить соответствующий заголовочный файл `#include
+<libswscale/swscale.h>` и слинковать с `libswscale`.
+
+```cpp
+int frameFinished;
+AVPacket packet;
+struct SwsContext *sws_ctx = NULL;
+
+sws_ctx = sws_getContext(pCodecCtx->width, pCodecCtx->height,
+            pCodecCtx->pix_fmt, pCodecCtx->width, pCodecCtx->height,
+            PIX_FMT_RGB24, SWS_BILINEAR, NULL, NULL, NULL);
+
+// Read frames and save first five frames to disk
+i = 0;
+while (av_read_frame(pFormatCtx, &packet) >= 0) {
+    // Is this a packet from the video stream?
+    if (packet.stream_index == videoStream) {
+        // Decode video frame
+        avcodec_decode_video2(pCodecCtx, pFrame, &frameFinished,
+                             &packet);
+
+        // Did we get a video frame?
+        if (frameFinished) {
+            // Convert the image from its native format to RGB
+            sws_scale(sws_ctx, (uint8_t const * const *)pFrame->data,
+                      pFrame->linesize, 0, pCodecCtx->height,
+                      pFrameRGB->data, pFrameRGB->linesize);
+
+            // Save the frame to disk
+            if (++i <= 5) {
+                SaveFrame(pFrameRGB, pCodecCtx->width,
+                          pCodecCtx->height, i);
+            }
+        }
+    }
+
+    // Free the packet that was allocated by av_read_frame
+    av_free_packet(&packet);
+}
+```
+
+Теперь реализуем функцию `SaveFrame` (про ppm формат можно почитать
+[здесь](https://ru.wikipedia.org/wiki/Portable_anymap)):
+
+```cpp
+void SaveFrame(AVFrame *pFrame, int width, int height, int iFrame) {
+    FILE *pFile;
+    char szFilename[32];
+    int y;
+
+    // Open file
+    sprintf(szFilename, "frame%d.ppm", iFrame);
+    pFile = fopen(szFilename, "wb");
+    if (pFile == NULL) {
+        return;
+    }
+
+    // Write header
+    fprintf(pFile, "P6\n%d %d\n255\n", width, height);
+
+    // Write pixel data
+    for (y = 0; y < height; y++) {
+        fwrite(pFrame->data[0] + y * pFrame->linesize[0], 1, width * 3, pFile);
+    }
+
+    // Close file
+    fclose(pFile);
+}
+```
+
+Осталось только все почистить:
+```cpp
+// Free the RGB image
+av_free(buffer);
+av_free(pFrameRGB);
+
+// Free the YUV frame
+av_free(pFrame);
+
+// Close the codec
+avcodec_close(pCodecCtx);
+
+// Close the video file
+avformat_close_input(&pFormatCtx);
+```
+
