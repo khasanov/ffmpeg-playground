@@ -330,3 +330,47 @@ avcodec_close(pCodecCtx);
 avformat_close_input(&pFormatCtx);
 ```
 
+### Tutorial 02: Вывод на экран
+
+#### SDL и видео
+
+Для отрисовки на экране мы используем [SDL](http://www.libsdl.org) (Simple
+DirectMedia Layer). В данном туториале используем библиотеку из репозитория. `$
+sudo apt-get install libsdl1.2-dev`
+
+SDL в целом имеет много методов для отрисовки изображений на экран, и в
+частности, один, вполне подходящий для показа видео -- YUV overlay.
+[YUV](http://en.wikipedia.org/wiki/YCbCr) -- это цветовая модель, в которой
+цвет представляется как 3 компоненты (яркость Y и две цветоразностных U и V).
+
+Наш план состоит в том, чтобы заменить функцию SaveFrame() из предыдущего
+туториала, а вместо этого показывать кадры на экране.
+
+Но сперва посмотрим, как использовать SDL.
+
+```cpp
+#include <SDL.h>
+
+int main(int argc, char *argv[]) {
+
+    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_TIMER)) {
+        fprintf(stderr, "Could not initialize SDL - %s\n", SDL_GetError());
+        exit(1);
+    }
+    return 0;
+}
+```
+
+Для компиляции используем утилиту `sdl-config`, которая просто возвращает
+правильные флаги:
+
+    $ sdl-config --cflags
+    -I/usr/include/SDL -D_GNU_SOURCE=1 -D_REENTRANT
+    $ sdl-config --libs
+    -L/usr/lib/x86_64-linux-gnu -lSDL
+
+    $ gcc -o tutorial02 tutorial02.c `sdl-config --cflags --libs`
+
+
+
+
