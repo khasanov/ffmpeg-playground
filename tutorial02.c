@@ -23,6 +23,7 @@ int main(int argc, char *argv[]) {
 
     SDL_Surface *screen = NULL;
     SDL_Overlay *bmp = NULL;
+    SDL_Rect rect;
 
     if (argc < 2) {
         printf("Please provide a movie file\n");
@@ -98,7 +99,7 @@ int main(int argc, char *argv[]) {
 
     sws_ctx = sws_getContext(pCodecCtx->width, pCodecCtx->height,
                 pCodecCtx->pix_fmt, pCodecCtx->width, pCodecCtx->height,
-                PIX_FMT_RGB24, SWS_BILINEAR, NULL, NULL, NULL);
+                PIX_FMT_YUV420P, SWS_BILINEAR, NULL, NULL, NULL);
 
     // Read frames and save first five frames to disk
     i = 0;
@@ -111,7 +112,29 @@ int main(int argc, char *argv[]) {
 
             // Did we get a video frame?
             if (frameFinished) {
-                ;
+                SDL_LockYUVOverlay(bmp);
+
+                AVPicture pict;
+                pict.data[0] = bmp->pixels[0];
+                pict.data[1] = bmp->pixels[2];
+                pict.data[2] = bmp->pixels[1];
+
+                pict.linesize[0] = bmp->pitches[0];
+                pict.linesize[1] = bmp->pitches[2];
+                pict.linesize[2] = bmp->pitches[1];
+
+                // Convert the image into YUV format that SDL uses
+                sws_scale(sws_ctx, (uint8_t const * const *)pFrame->data,
+                          pFrame->linesize, 0, pCodecCtx->height,
+                          pict.data, pict.linesize);
+
+                SDL_UnlockYUVOverlay(bmp);
+
+                rect.x = 0;
+                rect.y = 0;
+                rect.w = pCodecCtx->width;
+                rect.h = pCodecCtx->height;
+                SDL_DisplayYUVOverlay(bmp, &rect);
             }
         }
 

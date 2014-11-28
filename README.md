@@ -397,3 +397,42 @@ bmp = SDL_CreateYUVOverlay(pCodecCtx->width, pCodecCtx->height,
                            SDL_YV12_OVERLAY, screen);
 ```
 
+#### Показываем изображение
+
+Для показа изображения используем структуру AVPicture.
+
+```cpp
+if (frameFinished) {
+    SDL_LockYUVOverlay(bmp);
+
+    AVPicture pict;
+    pict.data[0] = bmp->pixels[0];
+    pict.data[1] = bmp->pixels[2];
+    pict.data[2] = bmp->pixels[1];
+
+    pict.linesize[0] = bmp->pitches[0];
+    pict.linesize[1] = bmp->pitches[2];
+    pict.linesize[2] = bmp->pitches[1];
+
+    // Convert the image into YUV format that SDL uses
+    sws_scale(sws_ctx, (uint8_t const * const *)pFrame->data,
+              pFrame->linesize, 0, pCodecCtx->height,
+              pict.data, pict.linesize);
+
+    SDL_UnlockYUVOverlay(bmp);
+}
+```
+
+Теперь скажем SDL показать отмасштабированное изображение.
+```cpp
+SDL_Rect rect;
+/* ... code ... */
+SDL_UnlockYUVOverlay(bmp);
+
+rect.x = 0;
+rect.y = 0;
+rect.w = pCodecCtx->width;
+rect.h = pCodecCtx->height;
+SDL_DisplayYUVOverlay(bmp, &rect);
+```
+
