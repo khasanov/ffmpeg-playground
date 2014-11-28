@@ -371,6 +371,18 @@ int main(int argc, char *argv[]) {
 
     $ gcc -o tutorial02 tutorial02.c `sdl-config --cflags --libs`
 
+Теперь нам необходимо место на экране для показа изображений (surface).
 
+```cpp
+// Make a screen to put our video
+SDL_Surface *screen = NULL;
+screen = SDL_SetVideoMode(pCodecCtx->width, pCodecCtx->height, 0, 0);
+if (!screen) {
+    fprintf(stderr, "SDL: could not set video mode - exiting\n");
+    exit(1);
+}
+```
 
-
+Этот код настраивает экран с переданной шириной и высотой. Следущая опция
+устанавливает битовую глубину экрана (0 означает "такая же как у текущего
+экрана", не работает для OS X).
