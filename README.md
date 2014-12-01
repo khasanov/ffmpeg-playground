@@ -667,3 +667,123 @@ SDL_CondWait() приостанавливает выполнение до пол
 быть уверенными, что поток не будет выполняться бесконечно, и не придется
 посылать `kill -9` программе.
 
+#### Гоняем пакеты
+
+Осталось только настроить очередь
+```cpp
+PacketQueue audioq;
+main() {
+...
+avcodec_open(aCodecCtx, aCodec);
+
+packet_queue_init(&audioq);
+SDL_PauseAudio(0);
+```
+
+SDL_PauseAudio() запускает аудиоустройство. Оно играет тишину, если не получает
+данных. Это не совсем то поведение, которое мы хотим.
+Снабдим очередь пакетами.
+```cpp
+while(av_read_frame(pFormatCtx, &packet)>=0) {
+  // Is this a packet from the video stream?
+  if(packet.stream_index==videoStream) {
+    // Decode video frame
+    ....
+    }
+  } else if(packet.stream_index==audioStream) {
+    packet_queue_put(&audioq, &packet);
+  } else {
+    av_free_packet(&packet);
+  }
+```
+
+Нет необходимости освобождать пакет после добавления в очередь. Мы освободим
+его после декодирования.
+
+Реализуем audio_callback()
+```cpp
+void audio_callback(void *userdata, Uint8 *stream, int len) {
+    AVCodecContext *aCodeCtx = (AVCodecContext *)userdata;
+    int len1, audio_size;
+
+    static uint8_t audio_buf[(MAX_AUDIO_FRAME_SIZE * 3) / 2];
+    static unsigned int audio_buf_size = 0;
+    static unsigned int audio_buf_index = 0;
+
+    while (len > 0) {
+        if (audio_buf_index >= audio_buf_size) {
+            // we have already sent all our data; get more
+            audio_size = audio_decode_frame(aCodeCtx, audio_buf, audio_buf_size);
+            if (audio_size < 0) {
+                // If error, output silence
+                audio_buf_size = 1024; // arbitrary?
+                memset(audio_buf, 0, audio_buf_size);
+            } else {
+                audio_buf_size = audio_size;
+            }
+            audio_buf_index = 0;
+        }
+        len1 = audio_buf_size - audio_buf_index;
+        if (len1 > len) {
+            len1 = len;
+        }
+        memcpy(stream, (uint8_t *)audio_buf + audio_buf_index, len1);
+        len -= len1;
+        stream += len1;
+        audio_buf_index += len1;
+    }
+}
+```
+#### Декодируем аудио
+
+```cpp
+int audio_decode_frame(AVCodecContext *aCodecCtx, uint8_t *audio_buf,
+                       int buf_size) {
+    static AVPacket pkt;
+    static uint8_t *audio_pkt_data = NULL;
+    static int audio_pkt_size = 0;
+    static AVFrame frame;
+
+    int len1, data_size;
+
+    for (;;) {
+        while (audio_pkt_size > 0) {
+            int got_frame = 0;
+            len1 = avcodec_decode_audio4(aCodecCtx, &frame, &got_frame, &pkt);
+            if (len1 < 0) {
+                // if error, skip frame
+                audio_pkt_size = 0;
+                break;
+            }
+            audio_pkt_data += len1;
+            audio_pkt_size -= len1;
+            if (got_frame) {
+                data_size = av_samples_get_buffer_size(NULL,
+                                                       aCodecCtx->channels,
+                                                       frame.nb_samples,
+                                                       aCodecCtx->sample_fmt,
+                                                       1);
+                memcpy(audio_buf, frame.data[0], data_size);
+            }
+            if (data_size <= 0) {
+                // No data yet, get more frames
+                continue;
+            }
+            // We have data, return it and come back for more later
+            return data_size;
+        }
+        if (pkt.data) {
+            av_free_packet(&pkt);
+        }
+        if (quit) {
+            return -1;
+        }
+        if (packet_queue_get(&audioq, &pkt, 1) < 0) {
+            return -1;
+        }
+        audio_pkt_data = pkt.data;
+        audio_pkt_size = pkt.size;
+    }
+}
+```
+
