@@ -457,3 +457,96 @@ default:
 скоростью! На самом деле, все кадры показываются с той же скоростью, с какой
 извлекаются из файла. В туториале 5 мы синхронизуем видео. Но сначала более
 важная задача: звук!
+
+### Tutorial 03: Воспроизводим звук
+
+В SDL есть методы для вывода звука. Для открытия аудиоустройства используется
+функция SDL_OpenAudio(). Она принимает в качестве аргумента структуру
+SDL_AudioSpec, которая содержит всю информацию об аудио, которое мы хотим
+воспроизвести.
+
+Цифровой звук состоит из потока сэмплов (samples). Звуки записаны с
+определенной частотой дискретизации (sample rate), что просто означает, как
+быстро играть каждый сэмпл (измеряется в числе сэмплов в секунду). Например,
+22050 и 44100 -- частоты, используемые для радио и CD, соответственно. Большая
+часть аудио содержит более одного канала для стерео или объемного звука. Когда
+мы получаем данные из файла фильма, мы не знаем как много сэмплов мы получим.
+SDL предлагает следующий метод воспроизведения аудио: выставляем настройки
+аудио (частоту, число каналов и т.д.) и устанавливаем колбек. Когда мы начинаем
+воспроизводить аудио, SDL постоянно вызывает эту функцию для заполнения буфера
+некоторым числом байт. После получения данных в структуре SDL_AudioSpec,
+вызываем функцию SDL_OpenAudio(), которая откроет аудиоустройство и вернет
+другую структуру AudioSpec. Последнюю мы в действительности и используем, но
+нет гарантии, что она та, которую мы запрашивали.
+
+```cpp
+// Find the first video stream
+videoStream = -1;
+audioStream = -1;
+for (i = 0; i < pFormatCtx->nb_streams; i++) {
+    if (pFormatCtx->streams[i]->codec->codec_type == AVMEDIA_TYPE_VIDEO &&
+           videoStream < 0) {
+        videoStream = i;
+    }
+    if (pFormatCtx->streams[i]->codec->codec_type == AVMEDIA_TYPE_AUDIO &&
+            audioStream < 0) {
+         audioStream = i;
+     }
+}
+if (videoStream == -1) {
+    return -1; // Didn't find a video stream
+}
+if (audioStream == -1)
+    return -1; // Didn't find an audio stream
+```
+
+Теперь получим желаемые параметры аудио:
+```cpp
+#define SDL_AUDIO_BUFFER_SIZE 1024
+
+AVCodecContext *aCodecCtx = NULL;
+SDL_AudioSpec wanted_spec, spec;
+
+// Seta audio settings from codec info
+aCodecCtx = pFormatCtx->streams[audioStream]->codec;
+wanted_spec.freq = aCodecCtx->sample_rate;
+wanted_spec.format = AUDIO_S16SYS;
+wanted_spec.channels = aCodecCtx->channels;
+wanted_spec.silence = 0;
+wanted_spec.samples = SDL_AUDIO_BUFFER_SIZE;
+wanted_spec.callback = audio_callback;
+wanted_spec.userdata = aCodecCtx;
+
+if (SDL_OpenAudio(&wanted_spec, &spec) < 0) {
+    fprintf(stderr, "SDL_OpenAudio: %s\n", SDL_GetError());
+    return -1;
+}
+```
+
+Пройдемся по параметрам:
+-   freq: частота дискретизации (sample rate)
+-   format: параметр сообщает SDL, какой формат использовать. S -- signed
+    (знаковое), 16 -- размер каждого сэмпла в битах, SYS -- порядок расположения
+    байт зависит от системы.
+-   channels: число каналов
+-   silence: тишина
+-   samples: размер буфера, по превышении которого SDL запросит следующую порцию
+    данных. Хорошее значение лежит между 512 и 8192, ffplay использует 1024
+-   callback: наш колбек
+-   userdata: SDL передаст колбеку в виде указателя на void* любые пользовательские
+    данные. Мы хотим, чтобы был известен кодек.
+
+Далее мы окрываем аудиоустройство с помощью SDL_OpenAudio(). Также нам нужно
+открыть и сам кодек:
+
+```cpp
+AVCodec *aCodec = NULL;
+AVDictionary *audioOptionsDict = NULL;
+
+aCodec = avcodec_find_decoder(aCodecCtx->codec_id);
+if (!aCodec) {
+    fprintf(stderr, "Unsupported codec!\n");
+    return -1;
+}
+avcodec_open2(aCodecCtx, aCodec, &audioOptionsDict);
+```
