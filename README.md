@@ -787,3 +787,43 @@ int audio_decode_frame(AVCodecContext *aCodecCtx, uint8_t *audio_buf,
 }
 ```
 
+### Tutorial 04: Плодим треды
+
+Наша main-функция делает слишком много всего: пробегает по циклу событий,
+читает пакеты и декодирует видео. Разделим эти события: создадим тред,
+отвечающий за декодирование пакетов. Также при декодировании видео мы будем
+сохранять кадры в другой очереди.
+
+Для начала сделаем код более наглядным. Создадим структуру VideoState.
+```cpp
+typedef struct VideoState {
+    AVFormatContext *pFormatCtx;
+    int videoStream, audioStream;
+    AVStream *audio_st;
+    PacketQueue audioq;
+    uint8_t audio_buf[(MAX_AUDIO_FRAME_SIZE * 3) / 2];
+    unsigned int audio_buf_size;
+    unsigned int audio_buf_index;
+    AVFrame audio_frame;
+    AVPacket audio_pkt;
+    uint8_t *audio_pkt_data;
+    int audio_pkt_size;
+    AVStream *video_st;
+    PacketQueue videoq;
+
+    VideoPicture pictq[VIDEO_PICTURE_QUEUE_SIZE];
+    int pictq_size, pictq_rindex, pictq_windex;
+    SDL_mutex *pictq_mutex;
+    SDL_cond *pictq_cond;
+
+    SDL_Thread *parse_tid;
+    SDL_Thread *video_tid;
+
+    char filename[1024];
+    int quit;
+    AVIOContext *io_context;
+    struct SwsContext *sws_ctx;
+} VideoState;
+```
+
+
